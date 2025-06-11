@@ -14,7 +14,7 @@ namespace KastViewer.Core
         public int Width { get; private set; }
         public int Height { get; private set; }
         public string FilePath { get; private set; } = string.Empty;
-        public DateTime CreateDate { get; private set; }
+        public string CreateDate { get; private set; } = string.Empty;
         public bool IsCompressed => ActualSize != Size;
         public long ActualSize { get; private set; }
         public long Offset { get; private set; }
@@ -38,14 +38,15 @@ namespace KastViewer.Core
             br.ReadInt32();
             for (int i = 0; i < 3; i++)
                 br.ReadByte();
-            CreateDate = new DateTime(
-                br.ReadInt32(),
-                br.ReadInt32(),
-                br.ReadInt32(),
-                br.ReadInt32(),
-                br.ReadInt32(),
-                br.ReadInt32()
-            );
+            if (version >= 0x10001)
+                br.ReadInt32();
+            var year = br.ReadInt32();
+            var month = br.ReadInt32();
+            var day = br.ReadInt32();
+            var hour = br.ReadInt32();
+            var minute = br.ReadInt32();
+            var second = br.ReadInt32();
+            CreateDate = $"{year}-{month}-{day} {hour}:{minute}:{second}";
             ActualSize = br.ReadInt64();
             Size = br.ReadInt64();
             Offset = br.BaseStream.Position;
