@@ -5,8 +5,6 @@ from hashlib import md5
 from io import BufferedReader
 import zlib
 from zipfile import ZipFile
-from ctypes import CDLL
-import ctypes
 import sys
 import json as JSON
 
@@ -17,12 +15,27 @@ def resource_path(relative_path: str) -> str:
         base_path = Path.abspath(".")
     return Path.join(base_path, relative_path)
 
-utility=CDLL(resource_path("utility.dll"))
-utility.decrypt.restype=ctypes.c_int32
-utility.decrypt.argtypes=[ctypes.c_char_p,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32]
-
 KEY1:bytes=b"\x00\x08\x07\x03\x05\x0C\x0B\x0A\x09\x01\x02\x0E\x04\x0D\x06\x0F"
 KEY2:bytes=b"\x02\x0E\x04\x0A\x06\x0B\x03\x00\x09\x0F\x07\x01\x0D\x08\x0C\x05"
+
+
+def _crypt(data: bytes, key: bytes, start: int, *, direction: int) -> bytes:
+    """Encrypt/decrypt implementation.
+
+    This mirrors `utility.cpp` but implemented in pure Python so the project can
+    run without the native `utility.dll`.
+
+    The original C++ operates on `char` and overflows wrap; we emulate that with
+    mod-256 arithmetic.
+    """
+    if not data:
+        return data
+    out = bytearray(data)
+    for i in range(len(out)):
+        j = (i + start) % 16
+        delta = (j * key[j]) & 0xFF
+        out[i] = (out[i] + direction * delta) & 0xFF
+    return bytes(out)
 
 def guess_data_version(filepath:str)->str:
     with open(filepath,"rb") as br:
@@ -62,10 +75,8 @@ def verify(verify_code:int,verify_code_md5:bytes)->bool:
 
 
 def decrypt(data:bytes,key:bytes,start:int=0)->bytes:
-    if utility.decrypt(ctypes.c_char_p(data),ctypes.c_int32(len(data)),ctypes.c_char_p(key),ctypes.c_int32(start))!=len(data):
-        print("Dectypt failed")
-        raise SystemExit(1)
-    return data
+    # direction=-1 => subtract
+    return _crypt(data, key, start, direction=-1)
 
 def isDefaultCheckFile(filepath:str)->bool:
     suffix_list=(".cg",".cgh",".dlp_d",".exe",".dll",".dlp",".webm")
